@@ -1,0 +1,1 @@
+This is a logger and logger factory, lets you init any number of distinct log streams - screen, file, with various different parameters and output levels, and which will write to them all in one command.
