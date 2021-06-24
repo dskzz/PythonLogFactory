@@ -1,104 +1,169 @@
 import inspect
 import datetime
+import format_map
+import os
 from classtools import AttrDisplay
 
-class skzz_log_control(  AttrDisplay ):
+#######
+# TODO - For better logging
+#	x	1. Implement Headers in controller and direct_print in logs.
+#		2. Filter out format_map invalids
+#		3. Mark and Blank line need work.  
+#		4. Error level constants
+#		5. Exit on error rules.  IE - error is level 3, then exit or Raise exception
+#######
+
+class skzz_log_control2( AttrDisplay ):
 	log_list = {}
 	log_location = ''
-	
-	
+	log_restart = None
+	log_mode = ''
+	_log_mode = ''
+	FILE_HANDLE = None
+
+	MAX_STD = 5		# loop, mark, control, vital, always show
+	MAX_WARN = 3	#  warning minor, warning major
+	MAX_ERR = 3		#  error simple, error breaks flow, error breaks program.
+
+
 	def __init__( self , file_loc = None, custom=False ):
 		if file_loc is not None:
-			self.log_location = file_loc
+			self.set_master_save_loc( file_loc )
 	
 		if custom is not True:
 			self.create_default( )
-	
-	
-	def create_default( self ):
-		self.create_log( 'debug', log_level = 4, log_prompt = '', log_number_prompt_delim='', log_save_file_loc=self.log_location, log_number_prompt_on= True)
-		print (" ")
-		self.create_log( 'screen', log_level = 2, log_prompt = 'CM', log_number_prompt_on= True)
-		print (" ")
-		self.create_log( 'error', log_level = 5, log_prompt = '!!', log_number_prompt_on= True, log_save_file_loc=self.log_location )
-		print (" ")
-	
-	def create_log( self, name, **kwargs ):
-		self.log_list[name] = skzzlogger2( **kwargs )
-	
-	def show_log( self, name ):
-		if self._check_log_name( name ) is False:
-			return
-			
-		print( log_list[name] )
+
+	def set_master_save_loc( self, file_loc , restart_once = True ):
+		mode = 'a+'
+		if self.check_file_exists( file_loc ) is False:
+			mode = 'w+'
+
+		if restart_once is True and skzz_log_control2.log_restart is None:
+			mode = 'w+'
+			skzz_log_control2.log_restart = True
+
+		skzz_log_control2.log_location = file_loc
+		skzz_log_control2._log_mode = mode
 		
-	def set_log_attr( self, name, **kwargs ):
-		if self._check_log_name( name ) is False:
-			return
+		try:
+			skzz_log_control2.FILE_HANDLE = open( skzz_log_control2.log_location, mode )
+#			print "File Opened: "+skzz_log_control2.log_location + " Mode: " + mode
+		
+		except Exception as e:
+			print ( "Log Failed to open " + skzz_log_control2.log_location + "; Attrib: " + mode +"; " + str(e) )
 			
-		self.log_list[name].set_attr( **kwargs )
-	
+
+	def check_file_exists( self, file ):
+		if( os.path.isfile( file ) ):
+			return True
+		else:
+			return False
+
+	def create_default( self ):
+		self.create_log( 'file', log_level = 4, log_prompt = '', log_number_prompt_delim=':', log_save_file_handle=skzz_log_control2.FILE_HANDLE, log_number_prompt_on= True, log_screen_write_on = False, log_file_write_on = True, log_keep_internal_on = False)
+#		print (" ")
+		
+		self.create_log( 'screen', log_level = 2, log_prompt = 'CM', log_number_prompt_on= True, log_screen_write_on = True, log_file_write_on = False , log_keep_internal_on = False, log_timestamp_format = None, log_timestamp_delim='', log_indent=2)
+#		print (" ")
+		
+		self.create_log( 'debug', log_level = 1, log_prompt = 'D',  log_number_prompt_delim=':',log_number_prompt_on= True, log_screen_write_on = False, log_file_write_on = False, log_keep_internal_on = True )
+#		print (" ")
+
+	def header( self, txt ):
+		for logname in self.log_list:
+			self.log_list[logname].direct_log( txt )     
+			#self.log_list[logname].direct_push( txt )
+
+
 	def _check_log_name( self, name ):
 		if name in self.log_list.keys():
 			return True
 		else:
 			return False
-		
-	
-	def mark( self, name = 'debug' ):
-		self.log_list[name].mark(  )
-	
-	def mark( self, name = 'debug' ):
-		self.log_list[name].omark(  )
-	
-	def log( self, txt, lvl=None, name = 'debug' ):
-		if self._check_log_name( name ) is False:
-			return
-		
-		print ("SCREEN LOG")
-		print ("screen log level " + str(self.log_list[name].log_level))
-		self.log_list[name].log( txt, lvl )
-		
-	
-	def out( self, txt, lvl=None, name = 'screen' ):
-		if self._check_log_name( name ) is False:
-			return
-		
-		self.log_list[name].out(txt,lvl)
-	
-	def m( self ):
-		for name in self.log_list:
-			self.log_list[name].mark( )
 
-	def om( self ):
-		for name in self.log_list:
-			self.log_list[name].omark( )
-			
-	
-	def o( self, txt, lvl ):
-		for name in self.log_list:
-			self.log_list[name].out( txt, lvl )
-			
-	def l( self, txt, lvl ): 
-		for name in self.log_list:
-			self.log_list[name].out( txt, lvl )
-	
-	def ol( self, txt, lvl ): 
-		for name in self.log_list:
-			self.log_list[name].out( txt, lvl )
-			self.log_list[name].log( txt, lvl )
-	
-	def err( self, txt, lvl=None , name = 'error' ):
+	def create_log( self, name, **kwargs ):
+		self.log_list[name] = skzzlogger2( **kwargs )
+
+
+	def set_log_attr_all_logs( self, **kwargs ):
+		for logname in self.log_list:
+			self.log_list[logname].set_attr( **kwargs ) 		
+
+	def set_log_attr( self, name, **kwargs ):
 		if self._check_log_name( name ) is False:
 			return
 		
+		self.log_list[name].set_attr( **kwargs ) 
+
+	def warn( self, txt, lvl =0, prmpt = None ):
 		if lvl is None:
-			lvl = self.log_list[name].get_err_lvl( )
-			
-		self.log_list[name].out( txt, lvl )
-		
-		
+			lvl = 0
+
+		# start warnings above the standard communications
+		# so 0 = Level 6.  6 and 7 are error levels. 
+		lvl = int(lvl) + self.MAX_STD + 1
+ 
+		if lvl >= self.MAX_STD + self.MAX_WARN :
+			lvl = self.MAX_STD + self.MAX_WARN 
+
+		if prmpt is None:
+			prmpt = "*"
+
+		for logname in self.log_list:
+			self.log_list[logname].olog( txt, None, lvl, prmpt )
+
+
+	def err( self, txt, lvl=0, prmpt = None ):
+		new_lvl = lvl + self.MAX_STD + 1 + self.MAX_WARN
+
+		if new_lvl > self.MAX_STD + self.MAX_WARN + self.MAX_ERR:
+			new_lvl = self.MAX_STD + self.MAX_WARN + self.MAX_ERR
+
+		if prmpt is None:
+			prmpt = "!"
+
+		print "ERROR - ACTUAL LEVEL: " + str(new_lvl) + "  Threshold: " + str(self.MAX_STD + self.MAX_WARN) 
+		for logname in self.log_list:
+			self.log_list[logname].olog( txt, None, new_lvl, prmpt )
 	
+	def log( self, txt, lvl=0, prmpt = None ):
+		
+		if lvl > self.MAX_STD:
+			lvl = self.MAX_STD
+
+		for logname in self.log_list:
+			self.log_list[logname].olog( txt, None, lvl, prmpt )                	
+
+	def flush_log( self ):
+		skzz_log_control2.FILE_HANDLE.flush()
+		self.close_log()
+
+	def mark( self ):
+		self.log_list['file'].mark()
+
+	def blank_mark( self ):
+		print "\n"
+
+	def close_log( self ):
+		skzz_log_control2.FILE_HANDLE.close()
+
+	def dump_logs( self ):
+		print '{:^90}'.format( "Dumping all logs" )
+		print "Master save location: " + skzz_log_control2.log_location + "   ---   Mode: " + self._log_mode
+		for logname in self.log_list:
+			print "** LOG NAME: " + str(logname).upper() + " ** "
+			self.log_list[logname].dump_log_stats( )
+
+	def get_internal( self , name = None):
+		if name is None:
+			if 'debug' in self.log_list:
+				return self.log_list['debug'].get_internal( )
+		else:
+			if name in self.log_list:
+				return self.log_list[name].get_internal( )
+			else:
+				return ""
+
 
 class skzzlogger2( AttrDisplay ):
 	log_on = True
@@ -106,30 +171,50 @@ class skzzlogger2( AttrDisplay ):
 	log_prompt = None             # This goes into prompts as such [x].  useful to set this module as different than main module.
 	log_timestamp_format = "%Y-%m-%d::%H:%M:%S"          # On or off - true or false, Put a timetamp in before prompt
 	log_save_file_loc = ''           # The location to write out the log if needed.
+	log_save_file_handle = None
 	log_number_prompt_on = False      # Add number to the prompt, use with smart prompt
 	log_prompt_format = "{log_timestamp}{log_prompt} {log_caller} {log_text}"
 	log_caller = True
 	
+	log_screen_write_on = True
+	log_file_write_on = True
+	log_keep_internal_on = False
+	
+
+	_log_internal = []
 	_default_level = 2
     
 	log_timestamp_delim = '-'
 	log_number_prompt_delim = ':'
+
+	log_indent = 0
 	
 	MIN_LEVEL = 0
 	MAX_LEVEL = 5
+	MAX_WARN_LEVEL = 3
 	MAX_ERR_LEVEL = 3
 	
 	LOG_FILE_HANDLE = None
 	
-	def __init__( self,  **kwargs ):
-		if __class__.log_save_file_loc is not None and __class__.log_save_file_loc is not "":
-			self.set_save_file_loc( __class__.log_save_file_loc )
-				
+	def __init__( self,  **kwargs ):		
 		self.set_attr( **kwargs )
 		
 		if self.log_level is None:
 			self.log_level = self._default_level
 	
+	def dump_log_stats ( self ):
+		print "______________ Log details ______________"
+		print "log_on: " + str(self.log_on )
+		print "log_level: " +  str(self.log_level )
+		print "log_prompt: " +   self.log_prompt 
+		if self.log_timestamp_format is not None: print "log_timestamp_format: " + self.log_timestamp_format
+		print "log_save_file_loc: " +   str(skzzlogger2.log_save_file_loc )
+		print "log_number_prompt_on: " +  str(self.log_number_prompt_on)
+		print "log_prompt_format: " +    self.log_prompt_format 
+		print "log_caller: " +    str( self.log_caller )
+		print "\n\n"
+		
+
 	def get_err_lvl( self ):
 		return self.MAX_LEVEL + 1
 	
@@ -141,8 +226,8 @@ class skzzlogger2( AttrDisplay ):
 			
 	
 	def validate_level( self,  level ):
-		if level > self.MAX_LEVEL + self.MAX_ERR_LEVEL:
-			level = self.MAX_LEVEL + self.MAX_ERR_LEVEL
+		if level > self.MAX_LEVEL + self.MAX_ERR_LEVEL +self.MAX_WARN_LEVEL:
+			level = self.MAX_LEVEL + self.MAX_ERR_LEVEL +self.MAX_WARN_LEVEL
 		
 		if level < self.MIN_LEVEL:
 			level = self.MIN_LEVEL
@@ -178,8 +263,13 @@ class skzzlogger2( AttrDisplay ):
 	def set_save_file_loc( self, loc , attrib='a+'):
 		self.log_save_file_loc = loc
 		
-		print ('save at :' +self.log_save_file_loc)
-		
+		if self.log_save_file_loc is None or self.log_save_file_loc != " ":
+			return
+		else:
+			print "["+self.log_save_file_loc+"]"
+
+		print ('Save at: ' +self.log_save_file_loc)
+		 
 		if len(attrib) > 2:
 			print ("Warning: Attribute " + attrib + " seems to be too long." )
 			
@@ -192,12 +282,13 @@ class skzzlogger2( AttrDisplay ):
 
 		
 	def init_file( self ):
-		try:
-			__class__.LOG_FILE_HANDLE = open( self.log_save_file_loc, self.log_save_file_attrib )
-		except Exception as e:
-			print ( "Failed to open " + self.log_save_file_loc + "; Attrib: " + self.log_save_file_attrib +"; " + str(e) )
-			exit()
-	
+		if not self.__class__.LOG_FILE_HANDLE  :
+			try:
+				self.__class__.LOG_FILE_HANDLE = open( self.log_save_file_loc, self.log_save_file_attrib )
+			except Exception as e:
+				print ( "Failed to open " + self.log_save_file_loc + "; Attrib: " + self.log_save_file_attrib +"; " + str(e) )
+				exit()
+		
 		
 	
 	def check_file_exists( self, file ):
@@ -212,13 +303,13 @@ class skzzlogger2( AttrDisplay ):
 			self.set_timestamp_format( kwargs.pop('log_timestamp_format', None ) )
 				
 		if 'log_save_file_loc' in kwargs.keys():
-			print ("SAVE FILE" )
+			#print ("SAVE FILE" )
 			self.set_save_file_loc( kwargs.pop('log_save_file_loc', None ) )
 		
 		for key in kwargs:
-			if key in dir( __class__ ):
+			if key in dir( self.__class__ ):
 				setattr( self, key, kwargs[key] )
-				print (key + "->" + str(kwargs[key]) )
+				#print (key + "->" + str(kwargs[key]) )
 	
 
 	def get_timestamp( self ):
@@ -233,7 +324,6 @@ class skzzlogger2( AttrDisplay ):
 				ts_stamp += " "
 				
 			return ts_stamp
-			
 		else:
 			return ""
 	
@@ -270,7 +360,7 @@ class skzzlogger2( AttrDisplay ):
 		prompt_bracket = str(prompt_bracket) +  str(self._generate_prompt_number( ))
 				
 		if prompt_bracket is not None and prompt_bracket != "":
-			return "[" + prompt_bracket +   "]"
+			return (" " * self.log_indent)  + "[" + prompt_bracket +   "]"
 		else:
 			return ""
 			
@@ -281,30 +371,59 @@ class skzzlogger2( AttrDisplay ):
 	def set_level( self, lvl ):
 			self.log_level = self.validate_level( lvl )
 	
-	
-	
-	
-	def out( self,  txt, level = None, tmp_prompt = None , caller = None):
-		self.test(  txt,  level , tmp_prompt , caller )
-		line = self.prep_line( txt,  level, tmp_prompt, caller )
-		
+	def direct_lp( self , txt ):
+		self.direct_print( txt )
+		self.direct_log( txt )
+
+	def direct_print( self , line ):
 		if line is not None and line != "":
-			print ( line )
-	
-	
-	
-	def log( self,  txt, caller = None, level = None, tmp_prompt = None ):
-		line = self.prep_line( txt, level, tmp_prompt , caller)
-		
-		if line is not None and line != "" and __class__.LOG_FILE_HANDLE is not None:
-			__class__.LOG_FILE_HANDLE.write( line +"\n") 
-	
-	
-	
+			if self.log_screen_write_on is not False:
+				print ( line )
+
+	def direct_log( self , line ):
+		if int(self.log_level) >=3:
+			if self.log_save_file_handle is not None:
+				if  line is not None and line is not "" :
+					if not self.log_save_file_handle.closed:
+						if self.log_file_write_on is not False:
+							self.log_save_file_handle.write( str(line) +"\n") 
+
+	def direct_push( self , line ):
+		if self.log_keep_internal_on is True:
+			if  line is not None and line is not "" :
+				self.add_to_internal_list( line )
+
+
+	# wrtie to screen and to file.
 	def olog( self,  txt, caller = None, level = None, tmp_prompt = None ):
-		self.log( txt, caller, level, tmp_prompt )
-		self.out( txt, caller, level, tmp_prompt )
-		
+		self.log( txt, level, tmp_prompt )
+		self.out( txt, level, tmp_prompt )
+		self.internal( txt, level, tmp_prompt )
+	
+	# out writes to screen
+	def out( self,  txt, level = None, tmp_prompt = None , caller = None ):
+		line = self.prep_line( txt,  level, tmp_prompt, caller, 'out' )
+		if line is not None and line != "":
+			if self.log_screen_write_on is not False:
+				print ( line )
+	
+	
+	# log writes to file.
+	def log( self,  txt, caller = None, level = None, tmp_prompt = None ):		
+		line = self.prep_line( txt, level, tmp_prompt , caller , 'log' )
+		if self.log_save_file_handle is not None:
+			if  line is not None and line is not "" :
+				if not self.log_save_file_handle.closed:
+					if self.log_file_write_on is not False:
+						self.log_save_file_handle.write( str(line) +"\n") 
+	
+	def internal( self, txt, level, tmp_prompt ):
+		if self.log_keep_internal_on is True:
+			line = self.prep_line( txt, level, tmp_prompt, True, 'internal')
+			if  line is not None and line is not "" :
+				self.add_to_internal_list( line )
+
+
 	def mark( self ):
 		self.log( ' -- MARK -- ',  10, False, False )
 		
@@ -314,6 +433,7 @@ class skzzlogger2( AttrDisplay ):
 		self.log( ' -- MARK -- ', 10, False, False )
 	
 	
+	
 	def test( self,  txt,  level = None, tmp_prompt = None , caller = None):
 		return
 		print ( txt )
@@ -321,20 +441,36 @@ class skzzlogger2( AttrDisplay ):
 		print (  tmp_prompt )
 		print (  caller )
 	
+	def flush_log( self ):
+		if  self.log_save_file_handle is not None:
+			if not self.log_save_file_handle.closed:
+				self.log_save_file_handle.flush()
+		
+		tmp = self._log_internal
+		self._log_internal = []
+		return tmp
 	
-	
-	def prep_line( self, txt,  level = None, tmp_prompt = None , caller = None):
+	def add_to_internal_list( self, txt ):
+		self._log_internal.append( txt )
+
+	def get_internal( self ):
+		return self._log_internal
+
+	def prep_line( self, txt,  level = None, tmp_prompt = None , caller = None, xtra = None):
+		#self.dump_log_stats( )
 		if level is None:
 			level = self._default_level
 		else:
 			level = self.validate_level( level )
-		
+
 		if self.log_on is not True:
-			return
-			
-		#print ( "level " + str(level ) + "  vs log_level " + str(self.log_level ))
-		if level < self.log_level:
-			return
+			return ""
+		
+
+#		print (  txt + "*** level: " + str( level ) + "  vs log_level " + str(self.log_level ))
+		if int(level) < int(self.log_level):
+#			print "        Returning"
+			return None
 			
 		log_caller = ''
 		if self.log_caller is not False and caller is not False:
@@ -347,22 +483,32 @@ class skzzlogger2( AttrDisplay ):
 		log_txt = txt
 		log_level = level
 		
-		#print ( 'ts: ' + log_timestamp  )
-		#print ( 'prompt: ' + log_prompt )
-		#print ( 'text: ' + log_text )
-		#print ( 'lvel: ' + str(log_level ))
+#		print ("who: " + str(xtra))
+#		print ( 'ts: ' + log_timestamp  )
+#		print ( 'prompt: ' + log_prompt )
+#		print ( 'text: ' + log_text )
+#		print ( 'lvel: ' + str(log_level ))
+#		print ( 'caller: ' + str(log_caller ))
+#		print (  "level: " + str(level ) + "  vs log_level " + str(self.log_level ))
 		
 		# log_prompt_format = "{log_timestamp}{log_prompt}{caller}{log_text}"
 		line = self.log_prompt_format
+		#print line
+		#{log_timestamp}{log_prompt} {log_caller} {log_text}
 		final_line = line.format_map( vars() )
-		final_line = final_line.format_map( vars() )
+		final_line = str(final_line).format_map( vars() )
+
+		#print ("Final line: " + final_line )
+		#print " "
 		return final_line 
 	
-	def caller_name(self, skip=4):
+	def caller_name(self, skip=6):
           """Get a name of a caller in the format module.class.method
 
              `skip` specifies how many levels of stack to skip while getting caller
              name. skip=1 means "who calls me", skip=2 "who calls my caller" etc.
+
+            
 
              An empty string is returned if skipped levels exceed stack height
           """
@@ -411,6 +557,5 @@ if __name__ == '__main__':
 	l.om( )
 	#l.err("This is an error!!!" )
 	#l.log("Hello", 8)
-	
 	
 	
